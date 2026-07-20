@@ -24,21 +24,33 @@ plan for the full roadmap.
 
 ## Getting started
 
-Requires Docker (running) and pnpm installed. Everything else is automatic:
+You need [Node.js](https://nodejs.org/) and [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+installed once. Everything else — starting Docker, the database, migrations,
+and both dev servers — happens automatically.
+
+**Windows:** double-click `setup.bat`.
+**macOS:** double-click `setup.command` (right-click → Open the first time, since it's unsigned).
+**Everyone else / prefer a terminal:**
 
 ```bash
 pnpm setup
 ```
 
-This one command creates `.env` with a fresh encryption secret (first run only,
-never overwrites an existing `.env`), starts Postgres in Docker, waits for it to
-be ready, installs dependencies, runs database migrations, and starts both dev
-servers. It's safe to re-run any time — each step is idempotent. Ctrl+C stops
-the dev servers; the Postgres container keeps running in the background for
-next time (`docker compose down` if you want to stop it too).
+This one command starts Docker Desktop for you if it isn't already running
+(and waits for it to finish starting up), creates `.env` with a fresh
+encryption secret on first run only, starts Postgres in Docker, waits for it
+to be ready, installs dependencies, runs database migrations, and starts both
+dev servers. It's safe to run again any time — every step is idempotent, and
+it will skip work that's already done. Closing the window (or Ctrl+C in a
+terminal) stops the dev servers; the Postgres container keeps running in the
+background so the next run is faster.
 
-The web client runs on http://localhost:5173, the server on http://localhost:8787.
+Once it says the app is running, open **http://localhost:5173** in your browser.
 
-The one manual step left: open the client's Settings screen, paste an
+The one manual step left: open the Settings section on that page, paste an
 OpenRouter API key, and click "Test connection" before starting a session.
 This can't be automated away — it's your own key (BYOK), not a shared one.
+
+If Docker isn't installed at all, the script tells you exactly where to
+download it and stops there — install it once, then run `pnpm setup` (or
+double-click the launcher) again.

@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../env.js";
 import { pool } from "./pool.js";
 
 const MIGRATIONS = [

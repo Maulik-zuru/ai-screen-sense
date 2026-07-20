@@ -35,6 +35,12 @@ function silent(cmd, args) {
   return spawnSync(cmd, args, { stdio: "ignore", shell: true });
 }
 
+function runCaptured(cmd, args) {
+  const result = spawnSync(cmd, args, { shell: true, encoding: "utf8" });
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+  return { status: result.status, output };
+}
+
 function commandExists(cmd) {
   return silent(cmd, ["--version"]).status === 0;
 }
@@ -117,6 +123,50 @@ async function waitForPostgres() {
   die("Postgres did not become ready in time. Check 'docker compose logs postgres'.");
 }
 
+function tryMigrate() {
+  const result = runCaptured("pnpm", ["--filter", "@ai-screen-sense/server", "db:migrate"]);
+  process.stdout.write(result.output);
+  return result;
+}
+
+async function runMigrationsWithSelfHeal() {
+  log("Setting up the database...");
+  let result = tryMigrate();
+  if (result.status === 0) {
+    log("Database is ready.");
+    return;
+  }
+
+  // POSTGRES_PASSWORD only takes effect the first time a container's data
+  // volume is initialized. If an earlier setup attempt (before .env existed,
+  // or with different values) already created that volume, Postgres keeps
+  // its original password forever, no matter what docker-compose.yml or .env
+  // say now — that mismatch shows up as an auth error, not a config error.
+  const looksLikeStaleVolume = /password authentication failed|28P01/i.test(result.output);
+  if (!looksLikeStaleVolume) {
+    die("Database migration failed. See the output above.");
+  }
+
+  log(
+    "That's a leftover Postgres database from an earlier setup attempt with different credentials " +
+      "— it's local disposable dev data for this project only, so resetting it and retrying..."
+  );
+  run("docker", ["compose", "down", "-v"]);
+  if (run("docker", ["compose", "up", "-d", "postgres"]).status !== 0) {
+    die("Failed to restart Postgres after resetting it. See the output above.");
+  }
+  await waitForPostgres();
+
+  result = tryMigrate();
+  if (result.status !== 0) {
+    die(
+      "Database migration still failed after resetting the local Postgres container. Try running " +
+        "`docker compose down -v` yourself in this folder, then run this script again."
+    );
+  }
+  log("Database is ready.");
+}
+
 async function main() {
   log("Checking prerequisites...");
   if (!commandExists("node")) {
@@ -151,10 +201,7 @@ async function main() {
     log("Dependencies already installed — skipping.");
   }
 
-  log("Setting up the database...");
-  if (run("pnpm", ["--filter", "@ai-screen-sense/server", "db:migrate"]).status !== 0) {
-    die("Database migration failed. See the output above.");
-  }
+  await runMigrationsWithSelfHeal();
 
   log("Everything is ready! Starting the app...");
   log("Once you see the app running below, open http://localhost:5173 in your browser.");

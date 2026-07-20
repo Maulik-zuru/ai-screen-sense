@@ -54,3 +54,8 @@ This can't be automated away — it's your own key (BYOK), not a shared one.
 If Docker isn't installed at all, the script tells you exactly where to
 download it and stops there — install it once, then run `pnpm setup` (or
 double-click the launcher) again.
+
+If a previous setup attempt left behind a Postgres container with different
+credentials (e.g. from an interrupted run), the script detects that specific
+failure automatically, resets the local database container (safe — it's
+disposable dev data for this project only), and retries once before giving up.

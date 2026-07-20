@@ -24,15 +24,21 @@ plan for the full roadmap.
 
 ## Getting started
 
+Requires Docker (running) and pnpm installed. Everything else is automatic:
+
 ```bash
-cp .env.example .env
-docker compose up -d
-pnpm install
-pnpm --filter server db:migrate
-pnpm dev
+pnpm setup
 ```
+
+This one command creates `.env` with a fresh encryption secret (first run only,
+never overwrites an existing `.env`), starts Postgres in Docker, waits for it to
+be ready, installs dependencies, runs database migrations, and starts both dev
+servers. It's safe to re-run any time — each step is idempotent. Ctrl+C stops
+the dev servers; the Postgres container keeps running in the background for
+next time (`docker compose down` if you want to stop it too).
 
 The web client runs on http://localhost:5173, the server on http://localhost:8787.
 
-In the client's Settings screen, paste an OpenRouter API key and click
-"Test connection" before starting a session.
+The one manual step left: open the client's Settings screen, paste an
+OpenRouter API key, and click "Test connection" before starting a session.
+This can't be automated away — it's your own key (BYOK), not a shared one.

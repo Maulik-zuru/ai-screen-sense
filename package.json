@@ -1,0 +1,14 @@
+{
+  "name": "ai-screen-sense",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"@ai-screen-sense/web\" --filter \"@ai-screen-sense/server\" dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint"
+  }
+}

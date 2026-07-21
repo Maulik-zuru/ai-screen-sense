@@ -1,0 +1,143 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* neutral spine */
+  --color-canvas: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f4f4f5;
+  --color-bg-hover: #f1f1f3;
+  --color-bg-active: #e9e9ec;
+  --color-border: #eaeaea;
+  --color-border-strong: #e4e4e7;
+  --color-border-hover: #c9c9c9;
+  --color-border-active: #a8a8a8;
+  --color-text: #171717;
+  --color-text-secondary: #4d4d4d;
+  --color-text-muted: #71717a;
+  --color-text-faint: #8f8f8f;
+
+  /* accent — pastel iris */
+  --color-accent-surface: #eeeefb;
+  --color-accent: #8b8cf0;
+  --color-accent-ink: #5b5bd6;
+  --color-accent-ink-hover: #4b4bc4;
+
+  /* severity */
+  --color-info-surface: #e8f6fc;
+  --color-info: #38bdf8;
+  --color-info-ink: #0e7490;
+  --color-warn-surface: #fef4e2;
+  --color-warn: #fbbf24;
+  --color-warn-ink: #b45309;
+  --color-crit-surface: #fdecef;
+  --color-crit: #fb7185;
+  --color-crit-ink: #be123c;
+
+  /* live / success */
+  --color-live-surface: #e6f7f0;
+  --color-live: #34d399;
+  --color-live-ink: #047857;
+
+  /* radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* motion */
+  --ease-signature: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  --default-transition-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+
+  /* shadows (floating layers only) */
+  --shadow-card: 0 0 0 1px rgba(0, 0, 0, 0.08);
+  --shadow-card-hover: 0 0 0 1px rgba(0, 0, 0, 0.14);
+  --shadow-pop: 0 1px 1px rgba(0, 0, 0, 0.02), 0 4px 8px -4px rgba(0, 0, 0, 0.04), 0 16px 24px -8px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 1px 1px rgba(0, 0, 0, 0.02), 0 8px 16px -4px rgba(0, 0, 0, 0.04), 0 24px 32px -8px rgba(0, 0, 0, 0.06);
+
+  /* focus */
+  --shadow-focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px var(--color-accent);
+
+  /* semantic z-index scale */
+  --z-index-dropdown: 100;
+  --z-index-sticky: 200;
+  --z-index-modal-backdrop: 300;
+  --z-index-modal: 400;
+  --z-index-toast: 500;
+  --z-index-tooltip: 600;
+
+  --animate-live-ping: live-ping 1.6s ease-in-out infinite;
+  --animate-float: float 3s ease-in-out infinite;
+}
+
+@keyframes live-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-surface);
+    color: var(--color-accent-ink);
+  }
+
+  .font-mono,
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@utility card-ring {
+  box-shadow: var(--shadow-card);
+}
+
+@utility focus-ring {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+@utility dot-grid {
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+  background-size: 20px 20px;
+}

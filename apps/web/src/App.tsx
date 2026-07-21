@@ -1,18 +1,49 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchKeyStatus, fetchPersonas, type PersonaSummary } from "./api.js";
 import { useScreenCapture, type CapturedFrame } from "./capture/useScreenCapture.js";
 import { useSessionSocket } from "./session/useSessionSocket.js";
 import { useSpeechPlayback } from "./voice/useSpeechPlayback.js";
-import { Settings } from "./components/Settings.js";
-import { TranscriptFeed } from "./components/TranscriptFeed.js";
+import { TopBar } from "./components/layout/TopBar.js";
+import { Rail } from "./components/rail/Rail.js";
+import { TranscriptPanel, type CritiqueEntry } from "./components/transcript/TranscriptPanel.js";
+import { SettingsModal } from "./components/settings/SettingsModal.js";
+import type { EmptyStateVariant } from "./components/transcript/EmptyState.js";
 
 type AnalysisMode = "fast" | "quality";
+
+function useElapsedTimer(active: boolean): string {
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!active) {
+      startRef.current = null;
+      setElapsed(0);
+      return;
+    }
+    startRef.current = Date.now();
+    const id = setInterval(() => {
+      setElapsed(Date.now() - (startRef.current ?? Date.now()));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [active]);
+
+  const totalSeconds = Math.floor(elapsed / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
+}
 
 export function App() {
   const [personas, setPersonas] = useState<PersonaSummary[]>([]);
   const [personaId, setPersonaId] = useState<string>("");
-  const [hasKey, setHasKey] = useState(false);
+  const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({});
   const [mode, setMode] = useState<AnalysisMode>("fast");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const receivedAtRef = useRef<Map<string, number>>(new Map());
+
+  const hasKey = Object.values(providerStatus).some(Boolean);
 
   const speech = useSpeechPlayback();
 
@@ -31,17 +62,27 @@ export function App() {
     onFrame: handleFrame,
   });
 
+  const elapsed = useElapsedTimer(isCapturing);
+
   const refreshKeyStatus = useCallback(() => {
-    fetchKeyStatus().then((status) => setHasKey(Object.values(status).some(Boolean)));
+    fetchKeyStatus()
+      .then((status) => setProviderStatus(status ?? {}))
+      .catch(() => setProviderStatus({}));
   }, []);
 
   useEffect(() => {
-    fetchPersonas().then((list) => {
-      setPersonas(list);
-      if (list.length > 0) setPersonaId(list[0].id);
-    });
+    fetchPersonas()
+      .then((list) => {
+        setPersonas(list);
+        if (list.length > 0) setPersonaId(list[0].id);
+      })
+      .catch(() => setPersonas([]));
     refreshKeyStatus();
   }, [refreshKeyStatus]);
+
+  useEffect(() => {
+    if (!hasKey) setSettingsOpen(false);
+  }, [hasKey]);
 
   async function handleStart() {
     connect();
@@ -59,63 +100,71 @@ export function App() {
     if (!value) speech.clear();
   }
 
+  const personaNameById = useMemo(
+    () => new Map(personas.map((p) => [p.id, p.name])),
+    [personas]
+  );
+
+  const entries: CritiqueEntry[] = useMemo(() => {
+    const map = receivedAtRef.current;
+    return critiques.map((critique) => {
+      if (!map.has(critique.id)) map.set(critique.id, Date.now());
+      return {
+        critique,
+        personaName: personaNameById.get(critique.personaId) ?? critique.personaId,
+        receivedAt: map.get(critique.id)!,
+      };
+    });
+  }, [critiques, personaNameById]);
+
+  const emptyVariant: EmptyStateVariant = !hasKey ? "no-keys" : isCapturing ? "listening" : "ready";
+
   return (
-    <main>
-      <h1>AI Screen Sense</h1>
-      <Settings onKeySaved={refreshKeyStatus} />
+    <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
+      <TopBar
+        isCapturing={isCapturing}
+        sessionId={sessionId}
+        elapsed={elapsed}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
 
-      <section>
-        <h2>Session</h2>
-        <label>
-          Persona
-          <select value={personaId} onChange={(e) => setPersonaId(e.target.value)}>
-            {personas.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Mode
-          <select value={mode} onChange={(e) => setMode(e.target.value as AnalysisMode)}>
-            <option value="fast">Fast &amp; cheap</option>
-            <option value="quality">Best quality</option>
-          </select>
-        </label>
-        {speech.supported && (
-          <label>
-            <input
-              type="checkbox"
-              checked={speech.enabled}
-              onChange={(e) => setSpeechEnabled(e.target.checked)}
-            />
-            Speak critiques aloud
-          </label>
-        )}
-        <div>
-          {!isCapturing ? (
-            <button onClick={handleStart} disabled={!hasKey || !personaId}>
-              Start session
-            </button>
-          ) : (
-            <button onClick={handleStop}>Stop session</button>
-          )}
-        </div>
-        {!hasKey && <p>Configure and save at least one provider key above before starting a session.</p>}
-        {isCapturing && (
-          <p>
-            Session {sessionId ?? "(connecting...)"} — frames sampled: {framesSampled}, sent:{" "}
-            {framesSent}
-          </p>
-        )}
-        {error && <p role="alert">{error}</p>}
-      </section>
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+        <Rail
+          personas={personas}
+          personaId={personaId}
+          onPersonaChange={setPersonaId}
+          mode={mode}
+          onModeChange={setMode}
+          speechSupported={speech.supported}
+          speechEnabled={speech.enabled}
+          onSpeechChange={setSpeechEnabled}
+          isCapturing={isCapturing}
+          hasKey={hasKey}
+          onStart={handleStart}
+          onStop={handleStop}
+          framesSampled={framesSampled}
+          framesSent={framesSent}
+          providerStatus={providerStatus}
+          onManageKeys={() => setSettingsOpen(true)}
+          error={error}
+        />
 
-      <section>
-        <h2>Transcript</h2>
-        <TranscriptFeed critiques={critiques} />
-      </section>
-    </main>
+        <main className="min-h-0 flex-1 overflow-hidden">
+          <TranscriptPanel
+            entries={entries}
+            isCapturing={isCapturing}
+            emptyVariant={emptyVariant}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        </main>
+      </div>
+
+      <SettingsModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        providerStatus={providerStatus}
+        onKeySaved={refreshKeyStatus}
+      />
+    </div>
   );
 }

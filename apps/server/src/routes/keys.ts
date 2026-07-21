@@ -1,20 +1,45 @@
 import { Router, type Router as RouterType } from "express";
 import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
+import type { ProviderId } from "@ai-screen-sense/shared";
 import { getProviderKey, hasProviderKey, saveProviderKey } from "../keys/store.js";
 import { asyncHandler } from "./asyncHandler.js";
 
 export const keysRouter: RouterType = Router();
 
-const SUPPORTED_PROVIDERS = ["openrouter"] as const;
+const SUPPORTED_PROVIDERS: ProviderId[] = ["openai", "anthropic", "gemini", "openrouter"];
 
 const SaveKeyBody = z.object({ apiKey: z.string().min(1) });
 
-function assertSupported(provider: string) {
-  if (!SUPPORTED_PROVIDERS.includes(provider as (typeof SUPPORTED_PROVIDERS)[number])) {
-    throw Object.assign(new Error(`Provider "${provider}" is not supported in Phase 1`), {
+function assertSupported(provider: string): asserts provider is ProviderId {
+  if (!SUPPORTED_PROVIDERS.includes(provider as ProviderId)) {
+    throw Object.assign(new Error(`Provider "${provider}" is not supported`), {
       status: 400,
     });
+  }
+}
+
+/** Trivial, cheap call per provider to validate a key (plan §2.4 "Test connection"). */
+async function testKey(provider: ProviderId, apiKey: string): Promise<void> {
+  switch (provider) {
+    case "openai": {
+      await new OpenAI({ apiKey }).models.list();
+      return;
+    }
+    case "anthropic": {
+      await new Anthropic({ apiKey }).models.list();
+      return;
+    }
+    case "gemini": {
+      await new GoogleGenAI({ apiKey }).models.list();
+      return;
+    }
+    case "openrouter": {
+      await new OpenAI({ apiKey, baseURL: "https://openrouter.ai/api/v1" }).models.list();
+      return;
+    }
   }
 }
 
@@ -49,8 +74,7 @@ keysRouter.post(
       return;
     }
 
-    const client = new OpenAI({ apiKey, baseURL: "https://openrouter.ai/api/v1" });
-    await client.models.list();
+    await testKey(req.params.provider, apiKey);
     res.json({ ok: true });
   })
 );

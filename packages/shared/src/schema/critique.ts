@@ -76,7 +76,8 @@ export const UxAnalysisRequestSchema = z.object({
   frame: FrameSchema,
   deterministicFindings: z.array(DeterministicFindingSchema).default([]),
   priorCritiques: z.array(CritiqueSummarySchema).default([]),
-  modelPreference: ModelPreferenceSchema,
+  /** Ordered list of provider+model to try; the router falls back to the next entry on failure. */
+  modelPreferenceChain: z.array(ModelPreferenceSchema).min(1),
 });
 export type UxAnalysisRequest = z.infer<typeof UxAnalysisRequestSchema>;
 

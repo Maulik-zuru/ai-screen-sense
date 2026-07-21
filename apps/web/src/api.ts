@@ -16,8 +16,10 @@ export async function fetchKeyStatus(): Promise<Record<string, boolean>> {
   return data.providers;
 }
 
-export async function saveOpenRouterKey(apiKey: string): Promise<void> {
-  const res = await fetch("/api/keys/openrouter", {
+export type ProviderId = "openai" | "anthropic" | "gemini" | "openrouter";
+
+export async function saveProviderKey(provider: ProviderId, apiKey: string): Promise<void> {
+  const res = await fetch(`/api/keys/${provider}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ apiKey }),
@@ -28,8 +30,8 @@ export async function saveOpenRouterKey(apiKey: string): Promise<void> {
   }
 }
 
-export async function testOpenRouterKey(): Promise<void> {
-  const res = await fetch("/api/keys/openrouter/test", { method: "POST" });
+export async function testProviderKey(provider: ProviderId): Promise<void> {
+  const res = await fetch(`/api/keys/${provider}/test`, { method: "POST" });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error ?? "Key test failed");

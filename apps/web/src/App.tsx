@@ -2,21 +2,29 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchKeyStatus, fetchPersonas, type PersonaSummary } from "./api.js";
 import { useScreenCapture, type CapturedFrame } from "./capture/useScreenCapture.js";
 import { useSessionSocket } from "./session/useSessionSocket.js";
+import { useSpeechPlayback } from "./voice/useSpeechPlayback.js";
 import { Settings } from "./components/Settings.js";
 import { TranscriptFeed } from "./components/TranscriptFeed.js";
+
+type AnalysisMode = "fast" | "quality";
 
 export function App() {
   const [personas, setPersonas] = useState<PersonaSummary[]>([]);
   const [personaId, setPersonaId] = useState<string>("");
   const [hasKey, setHasKey] = useState(false);
+  const [mode, setMode] = useState<AnalysisMode>("fast");
 
-  const { connect, disconnect, sendFrame, critiques, error, sessionId } = useSessionSocket();
+  const speech = useSpeechPlayback();
+
+  const { connect, disconnect, sendFrame, critiques, error, sessionId } = useSessionSocket({
+    onCritiques: (batch) => batch.forEach((c) => speech.enqueue(c)),
+  });
 
   const handleFrame = useCallback(
     (frame: CapturedFrame) => {
-      if (personaId) sendFrame(personaId, frame);
+      if (personaId) sendFrame(personaId, frame, mode);
     },
-    [personaId, sendFrame]
+    [personaId, mode, sendFrame]
   );
 
   const { start, stop, isCapturing, framesSampled, framesSent } = useScreenCapture({
@@ -24,7 +32,7 @@ export function App() {
   });
 
   const refreshKeyStatus = useCallback(() => {
-    fetchKeyStatus().then((status) => setHasKey(Boolean(status.openrouter)));
+    fetchKeyStatus().then((status) => setHasKey(Object.values(status).some(Boolean)));
   }, []);
 
   useEffect(() => {
@@ -43,6 +51,12 @@ export function App() {
   function handleStop() {
     stop();
     disconnect();
+    speech.clear();
+  }
+
+  function setSpeechEnabled(value: boolean) {
+    speech.setEnabled(value);
+    if (!value) speech.clear();
   }
 
   return (
@@ -62,6 +76,23 @@ export function App() {
             ))}
           </select>
         </label>
+        <label>
+          Mode
+          <select value={mode} onChange={(e) => setMode(e.target.value as AnalysisMode)}>
+            <option value="fast">Fast &amp; cheap</option>
+            <option value="quality">Best quality</option>
+          </select>
+        </label>
+        {speech.supported && (
+          <label>
+            <input
+              type="checkbox"
+              checked={speech.enabled}
+              onChange={(e) => setSpeechEnabled(e.target.checked)}
+            />
+            Speak critiques aloud
+          </label>
+        )}
         <div>
           {!isCapturing ? (
             <button onClick={handleStart} disabled={!hasKey || !personaId}>
@@ -71,7 +102,7 @@ export function App() {
             <button onClick={handleStop}>Stop session</button>
           )}
         </div>
-        {!hasKey && <p>Configure and save an OpenRouter key above before starting a session.</p>}
+        {!hasKey && <p>Configure and save at least one provider key above before starting a session.</p>}
         {isCapturing && (
           <p>
             Session {sessionId ?? "(connecting...)"} — frames sampled: {framesSampled}, sent:{" "}

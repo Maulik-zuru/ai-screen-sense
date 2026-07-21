@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
 import { z } from "zod";
 import { FrameSchema, type Critique } from "@ai-screen-sense/shared";
-import { getPersona } from "../personas/registry.js";
+import { getPersona, buildModelPreferenceChain } from "../personas/registry.js";
 import { checkContrast } from "../analyzers/contrast.js";
 import { routeAnalysis } from "../providers/router.js";
 import { createSession, endSession, getRecentTranscripts, saveCritique } from "../sessions/store.js";
@@ -13,6 +13,7 @@ const ClientFrameMessage = z.object({
   type: z.literal("frame"),
   personaId: z.string(),
   frame: FrameSchema,
+  mode: z.enum(["fast", "quality"]).default("fast"),
 });
 
 const ClientMessage = ClientFrameMessage;
@@ -78,7 +79,7 @@ export function createSessionGateway() {
           frame: parsed.frame,
           deterministicFindings,
           priorCritiques,
-          modelPreference: persona.defaultModelPreference,
+          modelPreferenceChain: buildModelPreferenceChain(persona, parsed.mode),
         });
 
         for (const critique of response.critiques) {

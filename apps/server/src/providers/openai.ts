@@ -1,25 +1,17 @@
 import OpenAI from "openai";
 import {
+  CRITIQUE_JSON_SCHEMA,
   CritiqueListSchema,
   type ProviderAdapter,
   type ProviderCredentials,
   type UxAnalysisRequest,
   type UxAnalysisResponse,
 } from "@ai-screen-sense/shared";
-import { buildContextText, extractJson } from "./shared.js";
-
-const RESPONSE_FORMAT_INSTRUCTION = `Respond with ONLY valid JSON, no markdown fences, no prose,
-matching exactly this shape:
-{"critiques": [{"id": string, "personaId": string, "severity": "info"|"warning"|"critical",
-"spokenText": string, "transcriptText": string, "codeFix"?: {"language": string, "before"?: string,
-"after": string}, "region"?: {"x": number, "y": number, "width": number, "height": number},
-"confidence": number, "source": "llm"|"deterministic"|"council"}]}`;
+import { buildContextText } from "./shared.js";
 
 function buildUserContent(req: UxAnalysisRequest) {
-  const context = buildContextText(req);
-
   return [
-    { type: "text" as const, text: `${context}\n\n${RESPONSE_FORMAT_INSTRUCTION}` },
+    { type: "text" as const, text: buildContextText(req) },
     {
       type: "image_url" as const,
       image_url: { url: `data:${req.frame.mimeType};base64,${req.frame.imageBase64}` },
@@ -27,10 +19,7 @@ function buildUserContent(req: UxAnalysisRequest) {
   ];
 }
 
-async function callOnce(
-  client: OpenAI,
-  req: UxAnalysisRequest
-): Promise<{ raw: unknown; tokensIn?: number; tokensOut?: number }> {
+async function callOnce(client: OpenAI, req: UxAnalysisRequest) {
   const completion = await client.chat.completions.create({
     model: req.modelPreferenceChain[0].model,
     messages: [
@@ -38,30 +27,35 @@ async function callOnce(
       { role: "user", content: buildUserContent(req) },
     ],
     temperature: 0.2,
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "emit_critiques",
+        strict: true,
+        schema: CRITIQUE_JSON_SCHEMA,
+      },
+    },
   });
 
   const text = completion.choices[0]?.message?.content ?? "";
   return {
-    raw: extractJson(text),
+    raw: JSON.parse(text),
     tokensIn: completion.usage?.prompt_tokens,
     tokensOut: completion.usage?.completion_tokens,
   };
 }
 
-export const openRouterAdapter: ProviderAdapter = {
-  id: "openrouter",
+export const openaiAdapter: ProviderAdapter = {
+  id: "openai",
   supportsVision: () => true,
-  supportsNativeRealtimeAudio: () => false,
-  supportsStructuredOutput: () => false,
+  supportsNativeRealtimeAudio: () => true,
+  supportsStructuredOutput: () => true,
 
   async analyzeFrame(
     req: UxAnalysisRequest,
     credentials: ProviderCredentials
   ): Promise<UxAnalysisResponse> {
-    const client = new OpenAI({
-      apiKey: credentials.apiKey,
-      baseURL: "https://openrouter.ai/api/v1",
-    });
+    const client = new OpenAI({ apiKey: credentials.apiKey });
 
     const start = Date.now();
     let lastError: unknown;
@@ -73,7 +67,7 @@ export const openRouterAdapter: ProviderAdapter = {
         return {
           critiques: parsed.critiques,
           rawProviderMeta: {
-            provider: "openrouter",
+            provider: "openai",
             model: req.modelPreferenceChain[0].model,
             latencyMs: Date.now() - start,
             tokensIn,
@@ -85,8 +79,6 @@ export const openRouterAdapter: ProviderAdapter = {
       }
     }
 
-    throw new Error(
-      `OpenRouter response failed schema validation after retry: ${String(lastError)}`
-    );
+    throw new Error(`OpenAI response failed schema validation after retry: ${String(lastError)}`);
   },
 };
